@@ -50,7 +50,7 @@ and restarts them afterwards.
 ## Example
 Here is a real example taken from my cron jobs (but with line breaks added for readability)
 ```
-4 5 * thu *       root    /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -musage=0,limit=10 /mnt/data ;
+4 5 * * thu       root    /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -musage=0,limit=10 /mnt/data ;
  /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -dusage=0,limit=5 /mnt/data ;
  /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -musage=20,limit=10 /mnt/data ;
  /usr/local/sbin/btrfs-balance-slowly --limit 20 --time 3600 --hook hook-nomail -dusage=20,limit=5 /mnt/data
