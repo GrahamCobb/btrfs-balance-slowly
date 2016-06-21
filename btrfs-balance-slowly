@@ -73,12 +73,14 @@ filter=$1
 disk=$2
 
 function start-portion-timer {
+    test $portion_tlimit -eq 0 && return
     # Run a timer and cancel the balance if it expires
     ( for ((i=portion_tlimit; i-- ; )) ; do sleep 1 ; done; echo "Portion timeout ($portion_tlimit seconds)" ; btrfs balance status $disk ; btrfs balance cancel $disk ) &
     portion_timer=$!
 }
 
 function stop-portion-timer {
+    test $portion_tlimit -eq 0 && return
     kill $portion_timer  2>/dev/null && wait $portion_timer 2>/dev/null
 }
 
