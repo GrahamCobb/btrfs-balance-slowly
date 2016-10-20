@@ -96,7 +96,7 @@ run-portion() {
     fi
 
     start-portion-timer
-    outfile=`mktemp`
+    outfile="$(mktemp)"
     command time -v btrfs balance start "$@" >$outfile
     runstatus=$?
     stop-portion-timer
@@ -188,18 +188,18 @@ hook-nomail() {
 
 count=0
 seconds=0
-portion_start=`date --utc +%s`
+portion_start="$(date --utc +%s)"
 while run-portion "$@"
 do
     count=$((count+1))
-    portion_end=`date --utc +%s`
+    portion_end="$(date --utc +%s)"
     seconds=$((seconds + 1 + portion_end - portion_start))
     
     [ -n "$limit" ] && [ "$limit" -gt 0 ] && [ "$count" -ge "$limit" ] && echo "Limit reached: $limit" && break
     [ -n "$tlimit" ] && [ "$tlimit" -gt 0 ] && [ "$seconds" -ge "$tlimit" ] && echo "Time limit reached: $tlimit seconds" && break
     
     sleep ${interval}s
-    portion_start=`date --utc +%s`
+    portion_start="$(date --utc +%s)"
 done
 
 echo "Balance completed in $count portions, $seconds seconds"
