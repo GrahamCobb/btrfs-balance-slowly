@@ -21,7 +21,7 @@ tlimit=3600
 hook="true"
 portion_tlimit=300
 
-function usage {
+usage() {
         echo "Usage: $0 " '[options] <filter> <disk>'
         echo $'\t<filter>\tbalance filter, for example: -dusage=20,limit=10'
         echo $'\t<disk>\tdisk to balance, for example: /mnt/backup2'
@@ -72,19 +72,19 @@ fi
 filter=$1
 disk=$2
 
-function start-portion-timer {
+start-portion-timer() {
     test $portion_tlimit -eq 0 && return
     # Run a timer and cancel the balance if it expires
     ( for ((i=portion_tlimit; i-- ; )) ; do sleep 1 ; done; echo "Portion timeout ($portion_tlimit seconds)" ; btrfs balance status $disk ; btrfs balance cancel $disk ) &
     portion_timer=$!
 }
 
-function stop-portion-timer {
+stop-portion-timer() {
     test $portion_tlimit -eq 0 && return
     kill $portion_timer  2>/dev/null && wait $portion_timer 2>/dev/null
 }
 
-function run-portion {
+run-portion() {
     # Run one portion.  Returns success if at least one chunk was relocated.
 
     pre-balance-hook "$@"
@@ -124,17 +124,17 @@ function run-portion {
     return $runstatus
 }
 
-function pre-balance-hook {
+pre-balance-hook() {
     $hook "pre" "$@"
 }
 
-function post-balance-hook {
+post-balance-hook() {
     $hook "post" "$@"
 }
 
 # Hook function to stop mail handling during the balance
 # Used for main data disk
-function hook-nomail {
+hook-nomail() {
     retstatus=0
         
     if [ "$1" = "pre" ]
