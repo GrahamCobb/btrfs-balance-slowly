@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2016 Graham R. Cobb
+# Copyright (C) 2016-2018 Graham R. Cobb
 # Released under GPL V2 -- see LICENSE
 
 # Note: the master version of this file is in git but it has to be checked
@@ -28,7 +28,7 @@ usage() {
         echo $'Options:'
         echo $'\t-l | --limit\t<count> - maximum number of portions, default' $limit
         echo $'\t-t | --time\t<seconds> - maximum total time (in seconds), default' $tlimit
-        echo $'\t-t | --portion-time\T<seconds> - timeout for each balance portion (in seconds), default' $portion_tlimit
+        echo $'\t-T | --portion-time\t<seconds> - timeout for each balance portion (in seconds), default' $portion_tlimit
         echo $'\t-i | --interval\t<seconds> - delay between portions, default' $interval
         echo $'\t-h | --hook\t<command-or-function> - command to execute before/after portion of balance, default "true"'
 }
