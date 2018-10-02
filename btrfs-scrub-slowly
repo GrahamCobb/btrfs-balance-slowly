@@ -189,7 +189,7 @@ hook-nomail() {
 count=0
 seconds=0
 portion_start="$(date --utc +%s)"
-startorresume="resume"
+startorresume="start"
 
 while
     run-portion "$@"
