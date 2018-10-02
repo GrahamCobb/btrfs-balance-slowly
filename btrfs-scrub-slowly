@@ -1,0 +1,211 @@
+#!/bin/bash
+# Copyright (C) 2016-2018 Graham R. Cobb
+# Released under GPL V2 -- see LICENSE
+
+# Note: the master version of this file is in git but it has to be scrubed
+# and then stored somewhere like /usr/local/sbin/ to be safe to be run automatically by root.
+# Never have root automatically run programs/scripts that can be modified by non-root users.
+
+# btrfs-scrub-slowly [options] <disk>
+#
+# Do a btrfs scrub with frequent breaks.
+#
+# This script is designed to run a btrfs scrub in portions.
+# There can be delays between portions, and there are hooks to allow services
+# to be stopped during the scrub portion and restarted again afterwards.
+#
+
+interval=$((10*60))
+limit=0
+tlimit=0
+hook="true"
+portion_tlimit=$((1*60*60))
+
+usage() {
+        echo "Usage: $0 " '[options] <disk>'
+        echo $'\t<disk>\tdisk to scrub, for example: /mnt/backup2'
+        echo $'Options:'
+        echo $'\t-l | --limit\t<count> - maximum number of portions, default' $limit
+        echo $'\t-t | --time\t<seconds> - maximum total time (in seconds), default' $tlimit
+        echo $'\t-T | --portion-time\t<seconds> - timeout for each scrub portion (in seconds), default' $portion_tlimit
+        echo $'\t-i | --interval\t<seconds> - delay between portions, default' $interval
+        echo $'\t-h | --hook\t<command-or-function> - command to execute before/after portion of scrub, default "true"'
+}
+
+while [ $# -gt 1 ]
+do
+    if [ "$1" = "-l" -o "$1" = "--limit" ]
+    then
+        limit=$2
+        shift 2
+    elif [ "$1" = "-t" -o "$1" = "--time" ]
+    then
+         tlimit=$2
+         shift 2
+    elif [ "$1" = "-T" -o "$1" = "--portion-time" ]
+    then
+         portion_tlimit=$2
+         shift 2
+    elif [ "$1" = "-i" -o "$1" = "--interval" ]
+    then
+         interval=$2
+         shift 2
+    elif [ "$1" = "-h" -o "$1" = "--hook" ]
+    then
+         hook=$2
+         shift 2
+    else
+        echo "Unrecognised option $1"
+        usage
+        exit 98
+    fi
+done
+
+if [ $# -ne 1 ]
+then
+    echo "Insufficient arguments"
+    usage
+    exit 97
+fi
+
+disk=$2
+
+start-portion-timer() {
+    test $portion_tlimit -eq 0 && return
+    # Run a timer and cancel the scrub if it expires
+    ( for ((i=portion_tlimit; i-- ; )) ; do sleep 1 ; done; echo "Portion timeout ($portion_tlimit seconds)" ; btrfs scrub status $disk ; btrfs scrub cancel $disk ) &
+    portion_timer=$!
+}
+
+stop-portion-timer() {
+    test $portion_tlimit -eq 0 && return
+    kill $portion_timer  2>/dev/null && wait $portion_timer 2>/dev/null
+}
+
+run-portion() {
+    # Run one portion.  Returns success if should be run again
+
+    pre-scrub-hook "$@"
+    hookstatus=$?
+    if [ $hookstatus -ne 0 ]
+    then
+        echo "Pre-scrub hook failed ($hookstatus)"
+        return $hookstatus
+    fi
+
+    start-portion-timer
+    outfile="$(mktemp)"
+    command time -v nice -10 btrfs scrub $startorresume -Bd -c 3 "$@" >$outfile
+    runstatus=$?
+    stop-portion-timer
+    cat $outfile
+    # Next run will be a "resume"
+    startorresume="resume"
+    # Scrub status 0 means the scrub finished, which means do not try again
+    if [ $runstatus -eq 0 ]
+    then
+        runstatus=255
+    fi
+    # Scrub status 1 means the scrub was cancelled, which means try again
+    if [ $runstatus -eq 1 ]
+    then
+        runstatus=0
+    fi
+   
+    post-scrub-hook "$@"
+    hookstatus=$?
+    if [ $hookstatus -ne 0 ]
+    then
+        echo "Post-scrub hook failed ($hookstatus)"
+        runstatus=$hookstatus
+    fi
+        
+    rm $outfile
+    return $runstatus
+}
+
+pre-scrub-hook() {
+    $hook "pre" "$@"
+}
+
+post-scrub-hook() {
+    $hook "post" "$@"
+}
+
+# Hook function to stop mail handling during the scrub
+# Used for main data disk
+hook-nomail() {
+    retstatus=0
+        
+    if [ "$1" = "pre" ]
+    then
+        systemctl stop fetchmail  && systemctl stop postfix && systemctl stop dovecot
+        retstatus=$?
+        if [ $retstatus -ne 0 ]
+        then
+            # Stopping services failed. Try to start them again
+            logger -s -t $0 "Stopping fetchmail, postfix or dovecot failed.  Trying restarting."
+            systemctl start dovecot
+            systemctl start postfix
+            systemctl start fetchmail
+        fi
+    elif [ "$1" = "post" ]
+    then
+        systemctl start dovecot
+        tempstatus=$?
+        if [ $tempstatus -ne 0 ]
+        then
+            logger -s -t $0 "Could not restart dovecot: $tempstatus"
+            retstatus=$tempstatus
+            # Dovecot has failed, but go on and try to restart postfix and fetchmail anyway
+        fi
+
+        systemctl start postfix
+        tempstatus=$?
+        if [ $tempstatus -ne 0 ]
+        then
+            logger -s -t $0 "Could not restart postfix: $tempstatus"
+            retstatus=$tempstatus
+            # Postfix has failed.  Do not restart fetchmail, just return
+            return $retstatus
+        fi
+
+        systemctl start fetchmail
+        tempstatus=$?
+        if [ $tempstatus -ne 0 ]
+        then
+            logger -s -t $0 "Could not restart fetchmail: $tempstatus"
+            retstatus=$tempstatus
+        fi
+    else
+        echo "$0 internal error: invalid hook argument $1"
+        retstatus=97
+    fi
+
+    return $retstatus
+    
+}
+
+count=0
+seconds=0
+portion_start="$(date --utc +%s)"
+startorresume="resume"
+
+while
+    run-portion "$@"
+do
+    portion_end="$(date --utc +%s)"
+    seconds=$((seconds + 1 + portion_end - portion_start))
+
+    count=$((count+1))
+    
+    [ -n "$limit" ] && [ "$limit" -gt 0 ] && [ "$count" -ge "$limit" ] && echo "Limit reached: $limit" && break
+    [ -n "$tlimit" ] && [ "$tlimit" -gt 0 ] && [ "$seconds" -ge "$tlimit" ] && echo "Time limit reached: $tlimit seconds" && break
+    
+    sleep ${interval}s
+    portion_start="$(date --utc +%s)"
+done
+portion_end="$(date --utc +%s)"
+seconds=$((seconds + 1 + portion_end - portion_start))
+
+echo "Scrub completed in $count portions, $seconds seconds"
