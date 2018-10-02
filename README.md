@@ -56,6 +56,23 @@ Here is a real example taken from my cron jobs (but with line breaks added for r
  /usr/local/sbin/btrfs-balance-slowly --limit 20 --time 3600 --hook hook-nomail -dusage=20,limit=5 /mnt/data
 ```
 
+#btrfs-scrub-slowly
+
+Similar script for btrfs scrub commands.
+
+Although not as disruptive as balance, scrubs can cause big slowdowns.
+
+I normally use this with long time limits set but meaning that if it gets too slow I can
+manually cancel the scrub knowing that the script will resume it in a while.
+
+Usage and hooks work the same as btrfs-balance-slowly except that no <filter> is used.
+
+## Example
+Real example from my cron jobs:
+```
+40 2 1 * *    root    /usr/local/sbin/btrfs-balance-slowly --portion-time $((6*60*60)) --interval $((1*60*60)) /mnt/data/
+```
+
 ## Notices
 Copyright (c) 2016 Graham R. Cobb.
 This software is distributed under the GPL (see the copyright notices and the LICENSE file).
