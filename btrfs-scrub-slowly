@@ -68,7 +68,7 @@ then
     exit 97
 fi
 
-disk=$2
+disk=$1
 
 start-portion-timer() {
     test $portion_tlimit -eq 0 && return
