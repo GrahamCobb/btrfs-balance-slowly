@@ -73,7 +73,13 @@ disk=$1
 start-portion-timer() {
     test $portion_tlimit -eq 0 && return
     # Run a timer and cancel the scrub if it expires
-    ( for ((i=portion_tlimit; i-- ; )) ; do sleep 1 ; done; echo "Portion timeout ($portion_tlimit seconds)" ; btrfs scrub status $disk ; btrfs scrub cancel $disk ) &
+    echo "Portion timer ($portion_tlimit seconds) starting"
+    ( for ((i=portion_tlimit; i-- ; )) ; do sleep 1 ; done;
+      echo "Portion timeout ($portion_tlimit seconds) - scrub will be cancelled" ;
+      echo "Scrub status just before cancel..." ;
+      btrfs scrub status -R $disk ;
+      btrfs scrub cancel $disk ;
+    ) &
     portion_timer=$!
 }
 
@@ -93,13 +99,14 @@ run-portion() {
         return $hookstatus
     fi
 
+    echo "scrub $startorresume ..."
     start-portion-timer
     outfile="$(mktemp)"
     command time -v nice -10 btrfs scrub $startorresume -Bd -c 3 "$@" >$outfile
     runstatus=$?
     stop-portion-timer
-    cat $outfile
-    # Next run will be a "resume"
+    cat $outfile ; echo 
+   # Next run will be a "resume"
     startorresume="resume"
     # Scrub status 0 means the scrub finished, which means do not try again
     if [ $runstatus -eq 0 ]
@@ -195,17 +202,20 @@ while
     run-portion "$@"
 do
     portion_end="$(date --utc +%s)"
-    seconds=$((seconds + 1 + portion_end - portion_start))
-
-    count=$((count+1))
+    ((seconds += 1 + portion_end - portion_start))
+    ((count++))
     
     [ -n "$limit" ] && [ "$limit" -gt 0 ] && [ "$count" -ge "$limit" ] && echo "Limit reached: $limit" && break
     [ -n "$tlimit" ] && [ "$tlimit" -gt 0 ] && [ "$seconds" -ge "$tlimit" ] && echo "Time limit reached: $tlimit seconds" && break
-    
+
+    echo "Scrub status before sleeping..."
+    btrfs scrub status -R $disk ;
     sleep ${interval}s
     portion_start="$(date --utc +%s)"
 done
 portion_end="$(date --utc +%s)"
-seconds=$((seconds + 1 + portion_end - portion_start))
+((seconds += 1 + portion_end - portion_start))
+((count++))
 
+btrfs scrub status -R $disk ;
 echo "Scrub completed in $count portions, $seconds seconds"
