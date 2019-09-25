@@ -26,7 +26,10 @@ such as mail to be stopped during the balance.
 btrfs-balance-slowly.python  [options] <disk>
         <disk>          disk to balance, for example: /mnt/backup2
 Options:
-	-u | --usage		<percentage> - only consider block groups with less than this percentage used
+	-d | --data		balance data block groups (default)
+	-m | --metadata		balance metadata block groups
+	-s | --system		balance system block groups
+	-u | --usage		<percentage> - only consider block groups with up to this percentage used
         -l | --limit   		<count> - maximum number of portions, default 0 (no limit)
         -t | --time     	<seconds> - maximum duration of the whole operation (in seconds), default 3600
 	-L | --portion-limit	<count> - maximum number of block groups in a portion, default 0 (no limit)
