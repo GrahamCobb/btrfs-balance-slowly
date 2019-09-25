@@ -172,14 +172,14 @@ def permission_check(fs):
     """
     fs.top_level()
 
-def pre_balance_hook(hook):
-    exec(hook + "(PRE)")
+def pre_balance_hook(hook, disk):
+    exec(hook + "(PRE,disk)")
 
-def post_balance_hook(hook):
-    exec(hook + "(POST)")
+def post_balance_hook(hook,disk):
+    exec(hook + "(POST,disk)")
 
 # Hook which does nothing (default)
-def hook_null(context):
+def hook_null(context, disk):
     if context == PRE :
         pass
     elif context == POST :
@@ -187,15 +187,26 @@ def hook_null(context):
     else :
         raise Bork("hook_null internal error: invalid hook argument {}".format(context))
 
+# Hook used for testing
+def hook_test(context, disk):
+    if context == PRE :
+        raise Bork("context = {} disk = {}".format(context, disk))
+    elif context == POST :
+        raise Bork("context = {} disk = {}".format(context, disk))
+    else :
+        raise Bork("hook_test internal error: invalid hook argument {}".format(context))
+
 # Hook which stops mail handling during balance
 # Used for main data disk on server
-def hook_nomail(context):
+def hook_nomail(context, disk):
     import subprocess
     import syslog
     if context == PRE :
         try :
             print("Stopping fetchmail, postfix and dovecot")
-            subprocess.run(["systemctl","stop","fetchmail"], check=True) and subprocess.run(["systemctl","stop","postfix"], check=True) and subprocess.run(["systemctl","stop","dovecot"], check=True)
+            subprocess.run(["systemctl","stop","fetchmail"], check=True)
+            subprocess.run(["systemctl","stop","postfix"], check=True)
+            subprocess.run(["systemctl","stop","dovecot"], check=True)
         except :
             # Stopping services failed. Try to start them again
             syslog.syslog(syslog.LOG_ERR,"Stopping fetchmail, postfix or dovecot failed.  Trying restarting.")
@@ -252,7 +263,7 @@ def main():
             # Start first portion
             portion_count = 1
             bg_count = 0
-            pre_balance_hook(hook)
+            pre_balance_hook(hook, path)
             portion_start_time = time.time()
             print("Portion {} starting at {}".format(portion_count,time.asctime(time.localtime(portion_start_time))))
             while len(block_groups) > 0 and (time.time() - balance_start_time) < tlimit and (limit == 0 or portion_count <= limit) :
@@ -266,16 +277,16 @@ def main():
                     if limit > 0 and portion_count >= limit :
                         break
                     print("Portion {} completed at {}. Suspend processing for {} seconds".format(portion_count,time.asctime(time.localtime()),interval))
-                    post_balance_hook(hook)
+                    post_balance_hook(hook, path)
                     time.sleep(interval)
                     portion_count += 1
                     bg_count = 0
-                    pre_balance_hook(hook)
+                    pre_balance_hook(hook, path)
                     portion_start_time = time.time()
                     print("Portion {} started at {}".format(portion_count,time.asctime(time.localtime(portion_start_time))))
             # End final portion
             print("Final portion {} completed at {}".format(portion_count,time.asctime(time.localtime())))
-            post_balance_hook(hook)
+            post_balance_hook(hook, path)
     except OSError as e:
         if e.errno == errno.EPERM:
             raise Bork("Insufficient permissions to use the btrfs kernel API.\n"
