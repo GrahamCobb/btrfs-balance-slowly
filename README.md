@@ -1,4 +1,4 @@
-#btrfs-balance-slowly.python
+# btrfs-balance-slowly.python
 
 Run btrfs balance with frequent breaks.
 
@@ -63,6 +63,7 @@ Here is a real example taken from my cron jobs (but with line breaks added for r
 ```
 
 ## Notices
+```
 Copyright (C) 2019 Graham R. Cobb
 Copyright (C) 2017 Hans van Kranenburg <hans@knorrie.org>
 
@@ -87,8 +88,9 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Note: this software is based on btrfs-balance-least-used, by
 Hans van Kranenburg <hans@knorrie.org>. Used with permission.
+```
 
-#btrfs-scrub-slowly
+# btrfs-scrub-slowly
 
 Similar script for btrfs scrub commands.
 
@@ -119,10 +121,9 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-#btrfs-balance-slowly
+# btrfs-balance-slowly
 
-This is the original bash version of the script, no longer maintained. The python version (above) is now the preferred version.
-
+This is the original `bash` version of the script, no longer maintained. The python version (above) is now the preferred version.
 The information below is provided for reference.
 
 Run btrfs balance with frequent breaks.
