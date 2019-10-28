@@ -57,12 +57,14 @@ There are two pre-defined hook functions: ``hook_null`` and ``hook_nomail``.
 and restarts them afterwards. It may provide a useful example for creating other hook functions.
 
 ## Example
-Here is a real example taken from my cron jobs (but with line breaks added for readability)
+Here are some real examples taken from my cron jobs (but with line breaks added for readability)
 ```
-4 5 * * thu       root    /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -musage=0,limit=10 /mnt/data ;
- /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -dusage=0,limit=5 /mnt/data ;
- /usr/local/sbin/btrfs-balance-slowly --time 600 --interval 300 -musage=20,limit=10 /mnt/data ;
- /usr/local/sbin/btrfs-balance-slowly --limit 20 --time 3600 --hook hook-nomail -dusage=20,limit=5 /mnt/data
+40 2 * * thu      root    /usr/local/sbin/btrfs-balance-slowly.python --time 3600 --portion-time 600 --interval 300 --hook hook_nomail -d --usage 0 /mnt/data ;
+/usr/local/sbin/btrfs-balance-slowly.python --time 600 --interval 300 -m --usage 20 /mnt/data ;
+/usr/local/sbin/btrfs-balance-slowly.python --limit 20 --time 7200 --portion-time 600 --hook hook_nomail -d --usage 20 /mnt/data
+
+5 3 * * mon       root    /usr/local/sbin/btrfs-balance-slowly.python -d --usage 0 /mnt/backup2 ;
+/usr/local/sbin/btrfs-balance-slowly.python -d -m -u 20 /mnt/backup2
 ```
 
 ## Notices
