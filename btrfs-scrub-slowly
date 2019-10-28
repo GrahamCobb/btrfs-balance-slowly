@@ -99,7 +99,7 @@ run-portion() {
         return $hookstatus
     fi
 
-    echo "scrub $startorresume ..."
+    echo "scrub $count $startorresume ..."
     start-portion-timer
     outfile="$(mktemp)"
     command time -v nice -10 btrfs scrub $startorresume -Bd -c 3 "$@" >$outfile
