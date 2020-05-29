@@ -90,8 +90,15 @@ start-portion-timer() {
 }
 
 stop-portion-timer() {
-    test $portion_tlimit -eq 0 && return
-    kill $portion_timer  2>/dev/null && wait $portion_timer 2>/dev/null
+    # Note: if return value is 129 the portion timer is not configured
+    # if return value is 143, then the kill killed the portion timer while it was still running
+    #  (scrub finished before portion timer finished)
+    # If it is <= 128 it is the return value from the scrub cancel in the portion timer
+    test $portion_tlimit -eq 0 && return 129
+    # Reduce race with portion timer finishing cancel processing (and debug output)
+    sleep 2
+    kill $portion_timer  2>/dev/null
+    wait $portion_timer 2>/dev/null
 }
 
 run-portion() {
@@ -113,7 +120,9 @@ run-portion() {
     command time -v nice -10 btrfs scrub $startorresume -Bd -c 3 "$@" >$outfile
     runstatus=$?
     stop-portion-timer
-    cat $outfile ; echo 
+    timerstatus=$?
+    cat $outfile ; echo
+    [ $debug -ne 0 ] && echo "actual runstatus=$runstatus, timerstatus=$timerstatus"
    # Next run will be a "resume"
     startorresume="resume"
     # Scrub status 0 means the scrub finished, which means do not try again
@@ -121,8 +130,9 @@ run-portion() {
     then
         runstatus=255
     fi
-    # Scrub status 1 means the scrub was cancelled, which means try again
-    if [ $runstatus -eq 1 ]
+    # Scrub status 1  and timer status <= 128 means the scrub ran out of time
+    # and was cancelled, which means try again
+    if [ $runstatus -eq 1 -a $timerstatus -le 128 ]
     then
         runstatus=0
     fi
