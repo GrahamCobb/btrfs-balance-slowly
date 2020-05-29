@@ -20,6 +20,7 @@ limit=0
 tlimit=0
 hook="true"
 portion_tlimit=$((1*60*60))
+debug=0
 
 usage() {
         echo "Usage: $0 " '[options] <disk>'
@@ -30,6 +31,7 @@ usage() {
         echo $'\t-T | --portion-time\t<seconds> - timeout for each scrub portion (in seconds), default' $portion_tlimit
         echo $'\t-i | --interval\t<seconds> - delay between portions, default' $interval
         echo $'\t-h | --hook\t<command-or-function> - command to execute before/after portion of scrub, default "true"'
+        echo $'\t-D | --debug - print additional debugging information'
 }
 
 while [ $# -gt 1 ]
@@ -54,6 +56,10 @@ do
     then
          hook=$2
          shift 2
+    elif [ "$1" = "-D" -o "$1" = "--debug" ]
+    then
+         debug=1
+         shift
     else
         echo "Unrecognised option $1"
         usage
@@ -99,6 +105,8 @@ run-portion() {
         return $hookstatus
     fi
 
+    echo "Scrub status before $startorresume..."
+    btrfs scrub status -dR $disk
     echo "scrub $count $startorresume ..."
     start-portion-timer
     outfile="$(mktemp)"
@@ -126,7 +134,9 @@ run-portion() {
         echo "Post-scrub hook failed ($hookstatus)"
         runstatus=$hookstatus
     fi
-        
+    
+    [ $debug -ne 0 ] && echo "modified runstatus=$runstatus"
+
     rm $outfile
     return $runstatus
 }
@@ -217,5 +227,5 @@ portion_end="$(date --utc +%s)"
 ((seconds += 1 + portion_end - portion_start))
 ((count++))
 
-btrfs scrub status -R $disk ;
+btrfs scrub status -dR $disk ;
 echo "Scrub completed in $count portions, $seconds seconds"
