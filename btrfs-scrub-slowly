@@ -2,7 +2,7 @@
 # Copyright (C) 2016-2018 Graham R. Cobb
 # Released under GPL V2 -- see LICENSE
 
-# Note: the master version of this file is in git but it has to be scrubed
+# Note: the master version of this file is in git but it has to be checked
 # and then stored somewhere like /usr/local/sbin/ to be safe to be run automatically by root.
 # Never have root automatically run programs/scripts that can be modified by non-root users.
 
