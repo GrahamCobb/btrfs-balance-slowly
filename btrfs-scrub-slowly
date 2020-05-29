@@ -196,7 +196,9 @@ hook-nomail() {
         then
             logger -s -t $0 "Could not restart dovecot: $tempstatus"
             retstatus=$tempstatus
-            # Dovecot has failed, but go on and try to restart postfix and fetchmail anyway
+            # Dovecot has failed, we used to just go on and try to restart postfix and fetchmail anyway
+            # but now that postifx depends on dovecot-lmtp we don't
+            return $retstatus
         fi
 
         systemctl start postfix
