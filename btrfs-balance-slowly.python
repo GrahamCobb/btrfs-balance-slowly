@@ -247,8 +247,10 @@ def hook_nomail(context, disk):
         if status_dovecot != 0 :
             syslog.syslog(syslog.LOG_ERR,"Could not restart dovecot: {}".format(status_dovecot))
             print("Could not restart dovecot: {}".format(status_dovecot), file=sys.stderr, flush=True)
-            # Dovecot has failed, but go on and try to restart postfix and fetchmail anyway
-        
+            # Dovecot has failed, we used to just go on and try to restart postfix and fetchmail anyway
+            # but now that postifx depends on dovecot-lmtp we don't
+            raise Bork("Could not restart dovecot: {}".format(status_dovecot))
+       
         status_postfix = subprocess.run(["systemctl","start","postfix"]).returncode
         if status_postfix != 0 :
             syslog.syslog(syslog.LOG_ERR,"Could not restart postfix: {}".format(status_postfix))
@@ -256,11 +258,12 @@ def hook_nomail(context, disk):
             raise Bork("Could not restart postfix: {}".format(status_postfix))
         
         status_fetchmail = subprocess.run(["systemctl","start","fetchmail"]).returncode
-        if status_postfix != 0 :
+        if status_fetchmail != 0 :
             syslog.syslog(syslog.LOG_ERR,"Could not restart fetchmail: {}".format(status_fetchmail))
             raise Bork("Could not restart fetchmail: {}".format(status_fetchmail))
         
         # Postfix and Fetchmail restarted, check whether dovecot failed
+        # Note: no longer used but left in place in case we go back to restarting postfix when dovecot fails
         if status_dovecot != 0 :
             raise Bork("Could not restart dovecot: {}".format(status_dovecot))
     else :
