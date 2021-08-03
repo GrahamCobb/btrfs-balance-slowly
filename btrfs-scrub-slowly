@@ -82,9 +82,14 @@ disk=$1
 # This function implements waits while showing the time remaining in the process name used by ps
 sleep-showing-remaining-seconds() {
     # $1 - time to sleep IN SECONDS
+    # $2 - message
     for ((i=$1; i-- ; ))
     do
-        bash -c "exec -a \"Out of $i, sleep\" sleep 1s"
+        hours="$(($i/3600)):"
+        [ "$hours" != "0:" ] || hours=""
+        mins="$((($i%3600)/60)):"
+        secs="$(($i%60))"
+        bash -c "exec -a \"$2 ($hours$mins$secs), sleep\" sleep 1s"
     done
 }
 
@@ -92,7 +97,7 @@ start-portion-timer() {
     test $portion_tlimit -eq 0 && return
     # Run a timer and cancel the scrub if it expires
     echo "Portion timer ($portion_tlimit seconds) starting"
-    ( sleep-showing-remaining-seconds $portion_tlimit
+    ( sleep-showing-remaining-seconds $portion_tlimit Scrubbing
       # for ((i=portion_tlimit; i-- ; )) ; do sleep 1s ; done
       echo "Portion timeout ($portion_tlimit seconds) - scrub will be cancelled"
       [ $debug -ne 0 ] && echo "Scrub status just before cancel..." && btrfs scrub status -dR $disk
@@ -246,7 +251,7 @@ do
     [ -n "$tlimit" ] && [ "$tlimit" -gt 0 ] && [ "$seconds" -ge "$tlimit" ] && echo "Time limit reached: $tlimit seconds" && break
 
     [ $debug -ne 0 ] && echo "Scrub status before sleeping..." && btrfs scrub status -dR $disk
-    sleep-showing-remaining-seconds ${interval}
+    sleep-showing-remaining-seconds ${interval} Paused
     portion_start="$(date --utc +%s)"
 done
 portion_end="$(date --utc +%s)"
