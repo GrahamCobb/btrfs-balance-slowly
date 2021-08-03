@@ -15,6 +15,9 @@
 # to be stopped during the balance portion and restarted again afterwards.
 #
 
+# GRC - on my systems, check there is not a new version to be deployed
+[ -x /usr/local/bin/check-usr-local-sbin ] && /usr/local/bin/check-usr-local-sbin "$0"
+
 interval=600
 limit=0
 tlimit=3600
