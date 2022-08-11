@@ -200,3 +200,12 @@ the Free Software Foundation; either version 2 of the License, or
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
+
+# Mirrors
+
+Currently this software is primarily made available on GitHub. GitHub should be used
+for issues or pull requests for now.
+
+Currently the repository is also made available on Codeberg as a secondary repository.
+I am investigating Codeberg as a development platform and may switch to it in
+the future.
