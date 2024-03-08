@@ -77,7 +77,39 @@ then
     exit 97
 fi
 
+# total lines of decimal numbers - for adding each device together
+total-lines() {
+    local num total=0
+    while read num
+    do
+        ((total+=num))
+    done
+    echo $total
+}
+
 disk=$1
+fs_uuid=$(btrfs fi show "$disk" | grep -o 'uuid: \+[-0-9a-f]\+' | cut -d ' ' -f 2)
+fs_size=$(btrfs fi show --raw "$fs_uuid" | grep -o 'size \+[-0-9]\+' | cut -d ' ' -f 2 | total-lines)
+
+# Calculate how many bytes have been scrubbed, for log messages and for protecting against runaways
+calc-bytes-scrubbed() {
+    btrfs scrub status -dR  $1 | fgrep _bytes_scrubbed | grep -o '[0-9]\+' | total-lines
+}
+
+# Debug code to check that last_physical is non-zero. UUID is passed as $1.
+# Note: this check is only valid if the scrub has been cancelled or finished.
+# If the scrub is running, this file may not be completely up to date.
+check-last-physical() {
+    local status_file_base='/var/lib/btrfs/scrub.status.'
+    local status_file="${status_file_base}$1"
+    if grep -F --quiet '|last_physical:0|' "$status_file"
+    then
+        echo "%%%ERROR: last_physical is 0"
+        cat "$status_file"
+        return 1
+    fi
+    return 0
+}
 
 # This function implements waits while showing the time remaining in the process name used by ps
 sleep-showing-remaining-seconds() {
@@ -100,10 +132,15 @@ start-portion-timer() {
     ( sleep-showing-remaining-seconds $portion_tlimit Scrubbing
       # for ((i=portion_tlimit; i-- ; )) ; do sleep 1s ; done
       echo "Portion timeout ($portion_tlimit seconds) - scrub will be cancelled"
-      [ $debug -ne 0 ] && echo "Scrub status just before cancel..." && btrfs scrub status -dR $disk
+      [ $debug -ne 0 ] && echo '>>>>' && echo "Scrub status just before cancel..." && btrfs scrub status -dR $disk && btrfs scrub status -d $disk && echo '<<<<'
       btrfs scrub cancel $disk
       ret=$?
-      [ $debug -ne 0 ] && echo "Scrub status just after cancel..." && btrfs scrub status -dR $disk
+      # Let the scrub exit
+      # WARNING: these must not take so long that stop-portion-time can drop through to its kill command before we have exited
+      # See the comment in stop-portion-timer before changing the following few lines.
+      sleep 5s
+      [ $debug -ne 0 ] && echo '>>>>' && echo "Scrub status just after cancel..." && btrfs scrub status -dR $disk && btrfs scrub status -d $disk && echo '<<<<'
+      [ $debug -ne 0 ] && check-last-physical $fs_uuid
       exit $ret
     ) &
     portion_timer=$!
@@ -116,7 +153,8 @@ stop-portion-timer() {
     # If it is <= 128 it is the return value from the scrub cancel in the portion timer
     test $portion_tlimit -eq 0 && return 129
     # Reduce race with portion timer finishing cancel processing (and debug output)
-    sleep 2
+    # WARNING - the sleep below must be long enough for the "scrub exit" actions in start-portion-timer
+    sleep 10s
     kill $portion_timer  2>/dev/null
     wait $portion_timer 2>/dev/null
 }
@@ -133,7 +171,8 @@ run-portion() {
     fi
 
     echo "Scrub status before $startorresume..."
-    btrfs scrub status -dR $disk
+    echo '>>>>' && btrfs scrub status -dR $disk && btrfs scrub status -d $disk && echo '<<<<'
+    [ $debug -ne 0 -a "$count" -gt 1 ] && check-last-physical $fs_uuid
     echo "scrub $count $startorresume ..."
     start-portion-timer
     outfile="$(mktemp)"
@@ -166,6 +205,33 @@ run-portion() {
     fi
     
     [ $debug -ne 0 ] && echo "modified runstatus=$runstatus"
+
+    # Debugging bad last_physical
+    if [ $debug -ne 0 ]
+    then
+        # This check is being tested to see if it can replace the one below
+        check-last-physical $fs_uuid
+        
+        # If we are going to resume, at least one last_physical must be non-zero
+        if [ $runstatus -eq 0 ]
+        then
+            last_physical=0
+            btrfs scrub status -dR  $disk | fgrep last_physical | grep -o '[0-9]\+' |
+                {
+                    while read num
+                    do
+                        ((last_physical+=num))
+                    done
+                    
+                    if [ $last_physical -eq 0 ]
+                    then
+                        echo "%%%ERROR: Resuming with all last_physical equal to 0!!"
+
+                        echo '>>>>' && btrfs scrub status -dR  $disk && btrfs scrub status -d $disk && echo '<<<<' 
+                    fi
+                }
+        fi
+    fi
 
     rm $outfile
     return $runstatus
@@ -235,28 +301,35 @@ hook-nomail() {
     
 }
 
-count=0
-seconds=0
+echo "Starting scrub on $disk ($fs_size bytes)"
+
 portion_start="$(date --utc +%s)"
 startorresume="start"
+seconds=0
+count=1
 
 while
     run-portion "$@"
 do
     portion_end="$(date --utc +%s)"
     ((seconds += 1 + portion_end - portion_start))
-    ((count++))
     
     [ -n "$limit" ] && [ "$limit" -gt 0 ] && [ "$count" -ge "$limit" ] && echo "Limit reached: $limit" && break
     [ -n "$tlimit" ] && [ "$tlimit" -gt 0 ] && [ "$seconds" -ge "$tlimit" ] && echo "Time limit reached: $tlimit seconds" && break
 
-    [ $debug -ne 0 ] && echo "Scrub status before sleeping..." && btrfs scrub status -dR $disk
+    # Work out number of bytes scrubbed so far
+    scrubbed=$(calc-bytes-scrubbed $disk)
+    [ $debug -ne 0 ] && echo "Scrubbed bytes: $scrubbed of $fs_size ($((100*scrubbed/fs_size))%)"
+    [[ "$scrubbed" -gt $((2*fs_size)) ]] && echo "ERROR: Scrubbed bytes ($scrubbed) more than twice disk total size ($fs_size)!!" && break
+
+    [ $debug -ne 0 ] && echo "Scrub status before sleeping..." && echo '>>>>' && btrfs scrub status -dR $disk && btrfs scrub status -d $disk && echo '<<<<'
     sleep-showing-remaining-seconds ${interval} Paused
     portion_start="$(date --utc +%s)"
+    ((count++))
 done
 portion_end="$(date --utc +%s)"
 ((seconds += 1 + portion_end - portion_start))
 ((count++))
 
-btrfs scrub status -dR $disk ;
+btrfs scrub status -dR $disk && btrfs scrub status -d $disk
 echo "Scrub completed in $count portions, $seconds seconds"
